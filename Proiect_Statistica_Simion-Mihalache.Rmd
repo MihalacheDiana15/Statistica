@@ -1,0 +1,866 @@
+---
+title: "Proiect Statistica"
+author: "Simion-Mihalache"
+date: "2024-02-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#1.1.b  (Algoritmul Box-Muller) funcție în R care să permită generarea unui eșantion de volum n dintr-o repartiție N(miu, sigma^2)
+
+# X ~ N(0, 1) => sigma^2 * X + miu ~ N(miu, sigma^2)
+
+X <- rep(0, n)
+U1 <- runif(n, 0, 1)    # U1 si U2 sunr uniforme pe [0,1], de volum n
+U2 <- runif(n, 0, 1)
+generare_algBM <- function(n, miu, sigma_la2){
+  for(i in 1:n){
+      X[i] <- (sqrt((-2)*log(U1[i]))*cos(2*pi*U2[i]))*sigma_la2 + miu
+  }
+  return(X)
+}
+
+
+n <-10000
+miu <- c(0, 5, 10)
+sigma_la2 <- c(1, 5)
+
+
+for(s in sigma_la2){
+  for(m in miu){                  # probability = TRUE face histograma pentru densitate
+    hist(generare_algBM(n, m, s), probability = TRUE, main = c("Media : ", m, "și varianța: " ,s), col = "pink")
+  }}
+
+
+#1.2.a generam 1000 de observații repartizate uniform pe D1={(u, v)|u^2 + v^2 <= 1}
+
+n <- 1000
+X <- rep(0, n)
+gen_disc_unitate <- function(n){
+  U1 <- runif(n, -1, 1)             # U1 si U2 sunt uniforme pe [-1,1], de volum n
+  U2 <- runif(n, -1, 1)
+  S <- U1^2 + U2^2 <= 1             # conditia noastra
+  puncte <- data.frame(U1[S], U2[S])
+  return(puncte)
+}
+observatii <- gen_disc_unitate(1000)   #  1000 de observații repartizate uniform pe discul unitate
+head(observatii)    # primele câteva observații
+
+
+#1.2.c (Algoritmul Box-Muller, versiunea polara)
+
+
+generare_algBM_coordpolare <- function(n, miu, sigma) {
+  X1 <- rep(0, n)
+  X2 <- rep(0, n)
+  U1 <- runif(n, -1, 1)    # U1 si U2 sunt uniforme pe [-1,1], de volum n
+  U2 <- runif(n, -1, 1)
+  S <- rep(0, n)
+  for(i in 1:n){
+      S[i] <- U1[i]^2 + U2[i]^2      
+      if(S[i] <= 1){
+        X1[i] <- U1[i] * sqrt(-2 * log(S[i]) / S[i]) * sigma + miu
+        X2[i] <- U2[i] * sqrt(-2 * log(S[i]) / S[i]) * sigma + miu
+        break
+      }}
+  return(list(X1 = X1, X2 = X2))
+}
+
+
+n <- 100
+miu <- c(0, 5, 10)
+sigma <- c(1, 5)
+
+
+for (s in sigma) {
+  for (m in miu) {
+    rezultat <- generare_algBM_coordpolare(n, m, s)
+    hist(rezultat$X1, probability = TRUE, main = paste("Media:", m, ", Varianța:", s), col = "pink", xlab = "Valoare")
+    hist(rezultat$X2, probability = TRUE, add = TRUE, main = paste("Media:", m, ", Varianța:", s), col = "lightblue", xlab = "Valoare")
+  }}
+valori_n <- c(100, 1000, 10000)
+
+
+rezultate <- data.frame(
+  n = integer(),
+  metoda = character(),
+  timp_executie = numeric()
+)
+
+
+for (n in valori_n) {
+  t_carteziana <- proc.time()                # Măsurarea timpului pentru versiunea cartesiană
+  generare_algBM(n, miu, sigma)
+  t_carteziana <- proc.time() - t_carteziana
+
+
+  t_polare <- proc.time()                    # Măsurarea timpului pentru versiunea polară
+  generare_algBM_coordpolare(n, miu, sigma)
+  t_polare <- proc.time() - t_polare
+ 
+  rezultate <- rbind(rezultate, data.frame(n = n, metoda = "carteziana", timp_executie = t_carteziana["elapsed"]))
+  rezultate <- rbind(rezultate, data.frame(n = n, metoda = "polara", timp_executie = t_polare["elapsed"]))
+}
+
+
+rezultate_medii <- aggregate(timp_executie ~ n + metoda, rezultate, mean)  # rezultatelor medii pentru fiecare metodă
+print(rezultate_medii)
+
+
+# 2.3 Pentru fiecare densitate din cele de mai sus estimați numărul de simulări 
+  # M necesar pentru a obține o acuratețe de 3 zecimale în estimarea lui E[X]
+f <- function(x) {         # densitatea f
+  return((sin(x))^2 * exp(-x^2/2))
+}
+g1 <- function(x) {        # densitatea g1
+  return(exp(-abs(x))/2)
+}
+g2 <- function(x) {        # densitatea g2
+  return(1/(2*pi*(1 + x^2/4)))
+}
+g3 <- function(x) {        # densitatea g3
+  return(exp(-x^2/2)/sqrt(2*pi))
+}
+
+
+raport_fg1 <- function(x) {
+  return(f(x)/g1(x))
+}
+raport_fg2 <- function(x) {
+  return(f(x)/g2(x))
+}
+raport_fg3 <- function(x) {
+  return(f(x)/g3(x))
+}
+
+
+maxim_raport_fg1 <- optimize(raport_fg1, interval = c(0, 10), maximum = TRUE)$maximum
+maxim_raport_fg2 <- optimize(raport_fg2, interval = c(0, 10), maximum = TRUE)$maximum
+maxim_raport_fg3 <- optimize(raport_fg3, interval = c(0, 10), maximum = TRUE)$maximum
+
+
+rata_acceptare_g1 <- 1 / maxim_raport_fg1          # rata de acceptare
+rata_acceptare_g2 <- 1 / maxim_raport_fg2
+rata_acceptare_g3 <- 1 / maxim_raport_fg3
+
+
+cat("Rata de acceptare pentru densitatea g1(x) este:", rata_acceptare_g1, "\n")
+cat("Rata de acceptare pentru densitatea g2(x) este:", rata_acceptare_g2, "\n")
+cat("Rata de acceptare pentru densitatea g3(x) este:", rata_acceptare_g3, "\n")
+
+
+
+
+
+
+estimeaza_numar_simulari <- function(rate_acceptare, densitate) {    # Metoda simulării Monte-Carlo
+  z <- qnorm(0.975)                              # pentru un interval de incredere de 95%
+  err <- 0.001                                   # eroarea dorita in estimare    
+  n <- 10000                                     # numărul de simulări
+  simulari <- replicate(n, densitate(runif(1)))  # generarea n valori aleatoare din densitate
+  medie_simulari <- mean(simulari)               # media simulărilor
+  varianța_simulari <- var(simulari)             # varianța simulărilor
+  numar_simulari <- (z^2 * varianța_simulari) / (err^2)
+  return(ceiling(numar_simulari))                # rotunjirea în sus la cel mai apropiat număr întreg
+}
+
+
+nr_simulari_g1 <- estimeaza_numar_simulari(rate_acceptare_g1, g1)
+nr_simulari_g2 <- estimeaza_numar_simulari(rate_acceptare_g2, g2)
+nr_simulari_g3 <- estimeaza_numar_simulari(rate_acceptare_g3, g3)
+
+
+cat("Numărul de simulări necesare pentru densitatea g1: M =", nr_simulari_g1, "\n")
+cat("Numărul de simulări necesare pentru densitatea g2: M =", nr_simulari_g2, "\n")
+cat("Numărul de simulări necesare pentru densitatea g3: M =", nr_simulari_g3, "\n")
+
+
+# 3.3 metodă de simulare din repartițiile de densitate f1 și f2
+
+f1<-function(x1,x2){   #f1 tilde
+  if(abs(x2)<=1){
+    return(exp(-1/2*(x1^2/4+x2^2)))
+  }
+  else{
+    return(0)
+  }
+}
+f2<-function(y1,y2){  #f2 tilde
+  return ((cos(y1)^2+0.5*sin(3*y2)^2*cos(y1)^4)*exp(-1/2*(y1^2/4+y2^2)))
+}
+g<-function(x1,x2){   #densitatea g găsită
+    return (1/(4*pi)*exp(-1/2*(x1^2/4+x2^2)))
+}
+respingere_f1<-function(n){      #funcția de respingere pentru f1                   
+            x<-numeric(n)        #aici stochez valorile lui X care îndeplinesc condiția din metoda respingerii           
+            y<-numeric(n)        #aici stochez valorile lui Y care îndeplinesc condiția din metoda respingerii
+            i<-0                 #variabila de numărare
+            while(i<=n){    
+              U<-runif(1,0,1)                       # U uniforma pe [0,1]
+              X<-rnorm(1,0,2)                       #normala de medie 0 si abatere standard 2
+              Y<-rnorm(1,0,1)                       #normala de medie 0 si abatere standard 1
+              if(4*pi*U*g(X,Y)<=f1(X,Y)){           #condiția de acceptare    
+                i=i+1                               # dacă observația este acceptată cresc pasul
+                x[i]<-X                             #salvez X respectiv Y pe poziția i în vectorii x respectiv y
+                y[i]<-Y
+                
+              }
+            }
+return (data.frame("X"=x,"Y"=y))                    #creez un data frame cu valorile acceptate
+}
+respingere_f2<-function(n){                         #funcția de respingere pentru f2    
+            x<-numeric(n)                           #aici stochez valorile lui X care îndeplinesc condiția din metoda respingerii                     
+            y<-numeric(n)                           #aici stochez valorile lui Y care îndeplinesc condiția din metoda respingerii
+            i<-0                                    #variabila de numărare      
+            while(i<=n){
+              U<-runif(1,0,1)                       # U uniforma pe [0,1]       
+              X<-rnorm(1,0,2)                       #normala de medie 0 si abatere standard 2
+              Y<-rnorm(1,0,1)                       #normala de medie 0 si abatere standard 1
+              if(6*pi*U*g(X,Y)<=f2(X,Y)){           #condiția de acceptare
+                i<-i+1                              # dacă observația este acceptată cresc pasul
+                x[i]<-X                             #salvez X respectiv Y pe poziția i în vectorii x respectiv y
+                y[i]<-Y
+              }
+            }
+return (data.frame("X"=x,"Y"=y))                   #creez un data frame cu valorile acceptate
+}
+R1<-respingere_f1(100000)
+R2<-respingere_f2(100000)
+R1
+R2
+
+
+# 3.4 Comparați densitățile marginale empirice rezultate din eșantionul generat anterior pentru repartiția de densitate f1 cu densitățile marginale teoretice ale lui f1 prin trasarea unei histograme peste care suprapunem densitatea teoretică
+
+# 3.4 
+f<-function(x){                                  #funcție a cărei integrală o calculez pentru densitatea marginală a lui f12
+  return(exp(-x^2/2))                   
+}
+
+f11<-function(x){                              # f11, f12 obținute prin calcule
+  return(1/(2*sqrt(2*pi))*exp(-x^2/8))
+}
+f12<-function(y){
+  c<-as.numeric(integrate(f,-1,1)[1]) #calculul integralei
+  for (i in (length(y))){
+   if(abs(y[i])<=1){
+    return (exp(-y^2/2)*1/c)
+  }
+   else{
+    return(0)
+  }
+}
+}
+
+#compar densitățile marginale empirice rezultate din eșantionul generat anterior pentru repartiția de densitate f1
+X <-R1$X 
+hist(X, freq = FALSE,col="darkgrey",
+     main = "Repartiția marginală a lui X1",ylim=c(0,0.25), xlim=c(-20,20),  ylab = "",
+     xlab = "", breaks = 50) #histogramă X1
+
+curve(expr = f11(x),
+      from = -20,
+      to = 20,
+      main = "f1x1",
+      add = TRUE,       #adaugă la histogramă
+      col = "deepskyblue4", #culoare
+      lwd = 4) #grosime
+
+legend("topright", "f1,1",
+       col = "deepskyblue4", lwd = 4)
+h=function(x){
+  exp(-x^2/2)
+}
+Y <- R1$Y 
+hist(Y, freq = FALSE,col="darkgrey",
+     main = "Repartiția marginală a lui X2", ylim=c(0,0.6), xlim=c(-1,1) , ylab = "",
+     xlab = "", breaks = 100) #histogramă X2
+
+curve(expr = f12(x),
+      from = -1,
+      to = 1,
+      main = "f1x2",
+      ylab = "",
+      add = TRUE,
+      col = "deepskyblue4",
+      lwd = 4)
+
+legend("topright", "f1,2",
+       col = "deepskyblue4", lwd = 4)
+
+
+# 3.5 reprezentarea 3D
+
+library(plot3D)
+
+xc <- cut(X, 50) 
+yc <- cut(Y, 50)
+z <- table(x_c, y_c) #nr. puncte care cad în fiecare secțiune dreptunghiulară
+#afișez  histograma
+hist3D(z=z)
+#reprezentarea 2D
+image2D(z=z)
+
+
+# 4.1 Calculam E[x] - Functia pentru medie                                  # parametri functiei, f = functia de masa / densiatate
+E_x <- function(nume, f, f_masa = 0, f_densitate = 0, parametri, x) {
+  if (nume == "Binomiala" || identical(f, dbinom)) {
+    m <- parametri$m
+    p <- parametri$p
+    media <- m * p
+  } else if (nume == "Geometrica" || identical(f, dgeom)) {
+    p <- parametri$p
+    media <- 1 / p
+  } else if (nume == "Poisson" || identical(f, dpois)) {
+    lambda <- parametri$lambda
+    media <- lambda
+  } else if (nume == "Uniforma discreta" || identical(f, function(x) sample(x = a:b, size = 1, TRUE))) {
+    a <- parametri$a
+    b <- parametri$b
+    media <- (a + b) / 2
+  } else if (nume == "Exponentiala" || identical(f, dexp)) {
+    lambda <- parametri$lambda
+    media <- 1 / lambda
+  } else if (nume == "Normala" || identical(f, dnorm)) {
+    miu <- parametri$miu
+    sigma <- parametri$sigma
+    media <- miu
+  } else if (nume == "Log-Normala" || identical(f, dlnorm)) {
+    miu <- parametri$miu
+    sigma <- parametri$sigma
+    media <- exp(miu + sigma^2 / 2)
+  } else if (nume == "Gamma" || identical(f, dgamma)) {
+    alpha <- parametri$alpha                   # shape
+    beta <- parametri$beta                     # rate
+    media <- alpha / beta
+  } else if (nume == "Beta" || identical(f, dbeta)) {
+    alpha <- parametri$alpha                    #shape1
+    beta <- parametri$beta                      #shape2
+    media <- alpha / (alpha + beta)
+  } else if (nume == NULL) {
+    if (f_masa == 1){                       # cazul in care o variabila discreta este data prin functia de masa
+      media <- 0
+      for(i in 1:length(x)) {
+        media <- media + x[i]*p[i] }}
+    else if (f_densitate == 1) {               # cazul in care o variabila continua este data prin densitate
+        media <- integrate(x*f(x), -1*Inf, Inf)$value}
+  return(media)
+}}
+
+
+# Functia pentru varianta
+Varianta_x <- function(nume, f, parametri, x) {
+  if (nume == "Binomiala" || identical(f, dbinom)) {
+    m <- parametri$m
+    p <- parametri$p
+    varianta <- m * p * (1 - p)
+  } else if (nume == "Geometrica" || identical(f, dgeom)) {
+    p <- parametri$p
+    varianta <- (1 - p) / (p^2)
+  } else if (nume == "Poisson" || identical(f, dpois)) {
+    lambda <- parametri$lambda
+    varianta <- lambda
+  } else if (nume == "Uniforma discreta" || identical(f, function(x) sample(x = a:b, size = 1, TRUE))) {
+    a <- parametri$a
+    b <- parametri$b
+    varianta <- (b - a)^2 / 12
+  } else if (nume == "Exponentiala" || identical(f, dexp)) {
+    lambda <- parametri$lambda
+    varianta <- 1 / lambda^2
+  } else if (nume == "Normala" || identical(f, dnorm)) {
+    miu <- parametri$miu
+    sigma <- parametri$sigma
+    varianta <- sigma^2
+  } else if (nume == "Log-Normala" || identical(f, dlnorm)) {
+    miu <- parametri$miu
+    sigma <- parametri$sigma
+    varianta <- (exp(sigma^2) - 1) * exp(2 * miu + sigma^2)
+  } else if (nume == "Gamma" || identical(f, dgamma)) {
+    alpha <- parametri$alpha                   # shape
+    beta <- parametri$beta                     # rate
+    varianta <- alpha / beta^2
+  } else if (nume == "Beta" || identical(f, dbeta)) {
+    alpha <- parametri$alpha                    #shape1
+    beta <- parametri$beta                      #shape2
+    varianta <- (alpha * beta) / ((alpha + beta)^2 * (alpha + beta + 1))
+  } else if(nume == NULL)                                                         # calculul variantei folosindu-ne de formula (cu media)    
+    varianta <- E_x(nume, f, f_masa, f_densitate, parametri, x^2) - (E_x(nume, f, f_masa, f_densitate, parametri, x))^2
+  return(varianta)
+}
+
+
+# Binomiala
+parametri_binomiala <- list(m = 10, p = 0.5)
+media_binom <- E_x("Binomiala", dbinom, f_masa = 0, f_densitate = 0, parametri_binomiala, x)
+var_binom <- Varianta_x("Binomiala", dbinom, parametri_binomiala, x)
+cat("Binomiala: Media = ", media_binom, "Varianta = ", var_binom, '\n')
+
+
+# Geometrica
+parametri_geometrica <- list(p = 0.3)
+f <- dgeom
+media_geom <- E_x("Geometrica", f, f_masa = 0, f_densitate = 0, parametri_geometrica, x)
+var_geom <- Varianta_x("Geometrica", f, parametri_geometrica, x)
+cat("Geometrica: Media = ", media_geom, "Varianta = ", var_geom, '\n')
+
+
+# Poisson
+parametri_poisson <- list(lambda = 2)
+media_p <- E_x("Poisson", dpois, f_masa = 0, f_densitate = 0, parametri_poisson, x)
+var_p <- Varianta_x("Poisson", dpois, parametri_poisson, x)
+cat("Poisson: Media = ", media_p, "Varianta = ", var_p, '\n')
+
+
+# Uniforma discreta
+parametri_uniforma <- list(a = 1, b = 5)
+media_u <- E_x("Uniforma discreta", NULL, f_masa = 0, f_densitate = 0, parametri_uniforma, x)
+var_u <- Varianta_x("Uniforma discreta", NULL, parametri_uniforma, x)
+cat("Uniforma discreta: Media = ", media_u, "Varianta = ", var_u, '\n')
+
+
+# Exponentiala
+parametri_exponentiala <- list(lambda = 0.2)
+media_exp <- E_x("Exponentiala", dexp, f_masa = 0, f_densitate = 0, parametri_exponentiala, x)
+var_exp <- Varianta_x("Exponentiala", dexp, parametri_exponentiala, x)
+cat("Exponentiala: Media = ", media_exp, "Varianta = ", var_exp, '\n')
+
+
+# Normala
+parametri_normale <- list(miu = 3, sigma = 1.5)
+media_normale <- E_x("Normala", dnorm, f_masa = 0, f_densitate = 0, parametri_normale, x)
+var_normale <- Varianta_x("Normala", dnorm, parametri_normale, x)
+cat("Normala: Media =", media_normale, ", Varianta =", var_normale, '\n')
+
+
+# Log-Normala
+parametri_lognormale <- list(miu = 0, sigma = 0.5)
+media_lognormale <- E_x("Log-Normala", f_masa = 0, f_densitate = 0, dlnorm, parametri_lognormale, x)
+var_lognormale <- Varianta_x("Log-Normala", dlnorm, parametri_lognormale, x)
+cat("Log-Normala: Media =", media_lognormale, ", Varianta =", var_lognormale, '\n')
+
+
+# Gamma
+parametri_gamma <- list(alpha = 2, beta = 0.5)
+media_gamma <- E_x("Gamma", dgamma, f_masa = 0, f_densitate = 0, parametri_gamma, x)
+var_gamma <- Varianta_x("Gamma", dgamma, parametri_gamma, x)
+cat("Gamma: Media =", media_gamma, ", Varianta =", var_gamma, '\n')
+
+
+# Beta
+parametri_beta <- list(alpha = 2, beta = 5)
+media_beta <- E_x("Beta", dbeta, f_masa = 0, f_densitate = 0, parametri_beta, x)
+var_beta <- Varianta_x("Beta", dbeta, parametri_beta, x)
+cat("Beta: Media =", media_beta, ", Varianta =", var_beta, '\n')
+
+
+# 4.2 Functia pentru E[|X1 - miu|^3]
+media_ex3 <- function(nume, f, f_masa = 0, f_densitate = 0, parametri, x1) {
+  # Verificăm dacă distribuția este continuă sau discretă
+  functii_masa <- c("Binomiala", "Geometrica", "Poisson", "Uniforma discreta")
+  functii_densitate <- c("Exponentiala", "Normala", "Log-Normala", "Gamma", "Beta")
+  if (nume %in% functii_masa || f_masa == 1) {
+    # Cazul variabilelor discrete
+    miu <- E_x(nume, f, f_masa = 1, f_densitate = 0, parametri, x1)        # miu = E[X1]
+    modul <- abs(x1 - miu)^3                  # modul = |X1 - miu|^3
+    return(E_x(nume, f, f_masa = 1, f_densitate = 0, parametri, modul))   # Calculează E[modul]
+  } else if (nume %in% functii_densitate || f_densitate == 1) {
+    # Cazul variabilelor continue
+    miu <- rep(0, length(x1))                  # Vector pentru miu
+    modul <- numeric(length(x1))               # Vector pentru |X1 - miu|^3
+    for (i in 1:length(x1)) {
+      modul[i] <- abs(x1[i] - miu[i])^3
+    }
+    return(E_x(nume, f, f_masa = 0, f_densitate = 1, parametri, modul))
+  } else {
+    stop("Distributia specificata nu este valida.")
+  }
+}
+
+
+# Binomiala
+parametri_binomiala <- list(m = 10, p = 0.5)
+x1_values_binomiala <- c(3, 5, 7)
+result_binomiala <- media_ex3("Binomiala", dbinom, f_masa = 0, f_densitate = 0, parametri_binomiala, x1_values_binomiala)
+cat("E[|X1 - miu|^3] pentru Binomiala:", result_binomiala, "\n")
+
+
+# Geometrica
+parametri_geometrica <- list(p = 0.3)
+x1_values_geometrica <- c(1, 2, 3)
+result_geometrica <- media_ex3("Geometrica", dgeom, f_masa = 0, f_densitate = 0, parametri_geometrica, x1_values_geometrica)
+cat("E[|X1 - miu|^3] pentru Geometrica:", result_geometrica, "\n")
+
+
+# Poisson
+parametri_poisson <- list(lambda = 2)
+x1_values_poisson <- c(1, 2, 3)
+result_poisson <- media_ex3("Poisson", dpois, f_masa = 0, f_densitate = 0, parametri_poisson, x1_values_poisson)
+cat("E[|X1 - miu|^3] pentru Poisson:", result_poisson, "\n")
+
+
+# Uniforma discreta
+parametri_uniforma <- list(a = 1, b = 5)
+x1_values_uniforma <- c(2, 3, 4)
+result_uniforma <- media_ex3("Uniforma discreta", NULL, f_masa = 0, f_densitate = 0, parametri_uniforma, x1_values_uniforma)
+cat("E[|X1 - miu|^3] pentru Uniforma discreta:", result_uniforma, "\n")
+
+
+# Exponentiala
+parametri_exponentiala <- list(lambda = 0.2)
+x1_values_exponentiala <- c(0.1, 0.5, 1)
+result_exponentiala <- media_ex3("Exponentiala", dexp, f_masa = 0, f_densitate = 0, parametri_exponentiala, x1_values_exponentiala)
+cat("E[|X1 - miu|^3] pentru Exponentiala:", result_exponentiala, "\n")
+
+
+# Normala
+parametri_normale <- list(miu = 3, sigma = 1.5)
+x1_values_normale <- c(2, 3, 4)
+result_normale <- media_ex3("Normala", dnorm, f_masa = 0, f_densitate = 0, parametri_normale, x1_values_normale)
+cat("E[|X1 - miu|^3] pentru Normala:", result_normale, "\n")
+
+
+# Log-Normala
+parametri_lognormale <- list(miu = 0, sigma = 0.5)
+x1_values_lognormale <- c(1, 2, 3)
+result_lognormale <- media_ex3("Log-Normala", dlnorm, f_masa = 0, f_densitate = 0, parametri_lognormale, x1_values_lognormale)
+cat("E[|X1 - miu|^3] pentru Log-Normala:", result_lognormale, "\n")
+
+
+# Gamma
+parametri_gamma <- list(alpha = 2, beta = 0.5)
+x1_values_gamma <- c(1, 2, 3)
+result_gamma <- media_ex3("Gamma", dgamma, f_masa = 0, f_densitate = 0, parametri_gamma, x1_values_gamma)
+cat("E[|X1 - miu|^3] pentru Gamma:", result_gamma, "\n")
+
+
+# Beta
+parametri_beta <- list(alpha = 2, beta = 5)
+x1_values_beta <- c(0.1, 0.5, 0.9)
+result_beta <- media_ex3("Beta", NULL, f_masa = 0, f_densitate = 0, parametri_beta, x1_values_beta)
+cat("E[|X1 - miu|^3] pentru Beta:", result_beta, "\n")
+
+
+# 4.3 data frame - marginile date de inegalitatea Berry-Esseen pentru repartițiile:
+# Binomială, Geometrică, Poisson, Uniformă (discret), resp. Exponențială, Gamma și Beta (continuu)
+
+n_val <- c(30, 100, 1000)
+
+
+Marg_Berry_Esseen <- data.frame(
+  col1 = c(33/4 * media_ex3("Binomiala", dbinom, f_masa = 0, f_densitate = 0, parametri_binomiala, x1_values_binomiala) / sqrt(Varianta_x("Binomiala", dbinom, parametri_binomiala, x))^3 * 1 / sqrt(30),    #binomiala
+           33/4 * media_ex3("Binomiala", dbinom, f_masa = 0, f_densitate = 0, parametri_binomiala, x1_values_binomiala) / sqrt(Varianta_x("Binomiala", dbinom, parametri_binomiala, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Binomiala", dbinom, f_masa = 0, f_densitate = 0, parametri_binomiala, x1_values_binomiala) / sqrt(Varianta_x("Binomiala", dbinom, parametri_binomiala, x))^3 * 1 / sqrt(1000)),
+
+
+  col2 = c(33/4 * media_ex3("Geometrica", dgeom, f_masa = 0, f_densitate = 0, parametri_geometrica, x1_values_geometrica) / sqrt(Varianta_x("Geometrica", dgeom, parametri_geometrica, x))^3 * 1 / sqrt(30),   #geometrica
+           33/4 * media_ex3("Geometrica", dgeom, f_masa = 0, f_densitate = 0, parametri_geometrica, x1_values_geometrica) / sqrt(Varianta_x("Geometrica", dgeom, parametri_geometrica, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Geometrica", dgeom, f_masa = 0, f_densitate = 0, parametri_geometrica, x1_values_geometrica) / sqrt(Varianta_x("Geometrica", dgeom, parametri_geometrica, x))^3 * 1 / sqrt(1000)),
+
+
+  col3 = c(33/4 * media_ex3("Poisson", dpois, f_masa = 0, f_densitate = 0, parametri_poisson, x1_values_poisson) / sqrt(Varianta_x("Poisson", dpois, parametri_poisson, x))^3 * 1 / sqrt(30),      #poisson
+           33/4 * media_ex3("Poisson", dpois, f_masa = 0, f_densitate = 0, parametri_poisson, x1_values_poisson) / sqrt(Varianta_x("Poisson", dpois, parametri_poisson, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Poisson", dpois, f_masa = 0, f_densitate = 0, parametri_poisson, x1_values_poisson) / sqrt(Varianta_x("Poisson", dpois, parametri_poisson, x))^3 * 1 / sqrt(1000)),
+                         
+  col4 = c(33/4 * media_ex3("Uniforma discreta", NULL, f_masa = 0, f_densitate = 0, parametri_uniforma, x1_values_uniforma) / sqrt(Varianta_x("Uniforma discreta", NULL, parametri_uniforma, x))^3 * 1 / sqrt(30),  #Unif discreta
+           33/4 * media_ex3("Uniforma discreta", NULL, f_masa = 0, f_densitate = 0, parametri_uniforma, x1_values_uniforma) / sqrt(Varianta_x("Uniforma discreta", NULL, parametri_uniforma, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Uniforma discreta", NULL, f_masa = 0, f_densitate = 0, parametri_uniforma, x1_values_uniforma) / sqrt(Varianta_x("Uniforma discreta", NULL, parametri_uniforma, x))^3 * 1 / sqrt(1000)),
+           
+  col5 = c(33/4 * media_ex3("Exponentiala", dexp, f_masa = 0, f_densitate = 0, parametri_exponentiala, x1_values_exponentiala) / sqrt(Varianta_x("Exponentiala", dexp, parametri_exponentiala, x))^3 * 1 / sqrt(30),  #exponentiala
+           33/4 * media_ex3("Exponentiala", dexp, f_masa = 0, f_densitate = 0, parametri_exponentiala, x1_values_exponentiala) / sqrt(Varianta_x("Exponentiala", dexp, parametri_exponentiala, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Exponentiala", dexp, f_masa = 0, f_densitate = 0, parametri_exponentiala, x1_values_exponentiala) / sqrt(Varianta_x("Exponentiala", dexp, parametri_exponentiala, x))^3 * 1 / sqrt(1000)),
+ 
+  col6 = c(33/4 * media_ex3("Gamma", dgamma, f_masa = 0, f_densitate = 0, parametri_gamma, x1_values_gamma) / sqrt(Varianta_x("Gamma", dgamma, parametri_gamma, x))^3 * 1 / sqrt(30),  #gamma
+           33/4 * media_ex3("Gamma", dgamma, f_masa = 0, f_densitate = 0, parametri_gamma, x1_values_gamma) / sqrt(Varianta_x("Gamma", dgamma, parametri_gamma, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Gamma", dgamma, f_masa = 0, f_densitate = 0, parametri_gamma, x1_values_gamma) / sqrt(Varianta_x("Gamma", dgamma, parametri_gamma, x))^3 * 1 / sqrt(1000)),
+ 
+  col7 = c(33/4 * media_ex3("Beta", NULL, f_masa = 0, f_densitate = 0, parametri_beta, x1_values_beta) / sqrt(Varianta_x("Beta", NULL, parametri_beta, x))^3 * 1 / sqrt(30),  #beta
+           33/4 * media_ex3("Beta", NULL, f_masa = 0, f_densitate = 0, parametri_beta, x1_values_beta) / sqrt(Varianta_x("Beta", NULL, parametri_beta, x))^3 * 1 / sqrt(100),
+           33/4 * media_ex3("Beta", NULL, f_masa = 0, f_densitate = 0, parametri_beta, x1_values_beta) / sqrt(Varianta_x("Beta", NULL, parametri_beta, x))^3 * 1 / sqrt(1000))
+       
+)
+colnames(Marg_Berry_Esseen) <- c("Binomiala", "Geometrica", "Poisson", "Uniforma discreta", "Exponentiala", "Gamma", "Beta")
+rownames(Marg_Berry_Esseen) <- c("n=30", "n=100", "n=1000")
+
+
+View(Marg_Berry_Esseen)
+head(Marg_Berry_Esseen)
+
+
+# 4.4 Functia pentru ilustrarea diferentelor
+library(ggplot2)
+
+ilustrare_berry_esseen <- function(nume, f, parametri, n_val, xlim, x) {
+  df <- data.frame(x = numeric(), diferenta = numeric(), nume = factor())   # data frame gol pentru a stoca datele
+  for (n in n_val) {
+    x_valori <- seq(xlim[1], xlim[2], length.out = 1000)                     # Generăm un set de valori x în intervalul specificat
+    media <- E_x(nume, f, f_masa = 0, f_densitate = 0, parametri, x_valori)  # Calculăm media și deviația standard
+    sigma <- sqrt(Varianta_x(nume, f, parametri, x_valori))
+    phi <- function(x) pnorm(x)                                             # Definim funcția phi care returnează probabilitatea ca o v.a. să fie mai mică sau egală cu x, distribuită standard normal
+   
+    X_n <- sum(x) / length(x)                                                # Calculăm media eșantionului
+   
+    diferenta <- pnorm(sqrt(n) * (X_n - media) / sigma) - phi(x_valori)      # Calculăm diferența dintre distribuția Z_n și distribuția normală standard
+    if (!is.null(x_valori) && !is.null(diferenta)) {                         # Adăugăm datele în data frame folosind rbind
+        df <- rbind(df, data.frame(x = x_valori, diferenta = diferenta, nume = rep(nume, length(x_valori))))
+    }
+  }
+ 
+  # Trasăm graficul folosind ggplot2
+  ggplot(df, aes(x = x, y = diferenta, color = nume)) +                    
+    geom_line() +                                                          
+    labs(title = "Evoluția diferenței P(Z_n <= x) - phi(x)",
+         x = "x",
+         y = "Diferență")
+}
+
+
+n_val <- c(30, 100, 1000)
+x = seq(0, 10, by = 0.1)
+
+
+# Binomiala
+nume_binomiala <- "Binomiala"
+functie_masa_binomiala <- dbinom
+parametri_binomiala <- list(m = 10, p = 0.5)
+xlim_range_binomiala <- c(0, 15)
+ilustrare_berry_esseen(nume_binomiala, functie_masa_binomiala, parametri_binomiala, n_val, xlim_range_binomiala, x)
+
+
+# Geometrica
+nume_geometrica <- "Geometrica"
+functie_masa_geometrica <- dgeom
+parametri_geometrica <- list(p = 0.3)
+xlim_range_geometrica <- c(0, 15)
+ilustrare_berry_esseen(nume_geometrica, functie_masa_geometrica, parametri_geometrica, n_val, xlim_range_geometrica, x)
+
+
+# Poisson
+nume_poisson <- "Poisson"
+functie_masa_poisson <- dpois
+parametri_poisson <- list(lambda = 2)
+xlim_range_poisson <- c(0, 15)
+ilustrare_berry_esseen(nume_poisson, functie_masa_poisson, parametri_poisson, n_val, xlim_range_poisson, x)
+
+
+# Normala
+nume_normala <- "Normala"
+functie_densitate_normala <- dnorm
+parametri_normala <- list(miu = 3, sigma = 1.5)
+xlim_range_normala <- c(0, 10)
+ilustrare_berry_esseen(nume_normala, functie_densitate_normala, parametri_normala, n_val, xlim_range_normala, x)
+
+
+# Exponentiala
+nume_exponentiala <- "Exponentiala"
+functie_densitate_exponentiala <- dexp  
+parametri_exponentiala <- list(lambda = 0.2)
+xlim_range_exponentiala <- c(0, 5)
+ilustrare_berry_esseen(nume_exponentiala, functie_densitate_exponentiala, parametri_exponentiala, n_val, xlim_range_exponentiala, x)
+
+
+# Gamma
+nume_gamma <- "Gamma"
+functie_densitate_gamma <- dgamma
+parametri_gamma <- list(alpha = 2, beta = 0.5)
+xlim_range_gamma <- c(0, 10)
+ilustrare_berry_esseen(nume_gamma, functie_densitate_gamma, parametri_gamma, n_val, xlim_range_gamma, x)
+
+
+# Beta
+nume_beta <- "Beta"
+functie_densitate_beta <- dbeta
+parametri_beta <- list(alpha = 2, beta = 5)
+xlim_range_beta <- c(0, 1)  
+ilustrare_berry_esseen(nume_beta, functie_densitate_beta, parametri_beta, n_val, xlim_range_beta, x)
+
+
+
+# 4.5 Funcție pentru calculul marginii date de inegalitatea Berry-Esseen pentru o v.a. dată
+
+
+margine_berry_esseen <- function(nume, f, parametri) {
+  F <- function(x) {                   # Definim funcția distribuției cumulative a v.a.
+    if (is.null(f)) {                  # Verificăm dacă este distribuție discretă sau continuă
+      p <- rep(0, length(x))
+      for (i in 1:length(x)) {         # Distribuție discretă =>
+        p[i] <- sum(f(x[1:i], parametri))  # calculăm funcția de distribuție cumulativă prin adunarea probabilitatilor
+      }
+      return(p)
+    } else {                           # Distribuție continuă =>
+      return(pnorm(x))                 # folosim funcția pnorm pentru a calcula distribuția cumulative normală standard
+    }}
+  D <- function(x) {                   # Definim deviația maximă a funcției distribuției cumulative față de funcția distribuției normale standard
+    if (is.null(f)) {                  # Verificăm dacă este distribuție discretă sau continuă
+      sup <- 0                         # Distribuție discretă =>
+      for (i in 1:length(x)) {            # calculăm deviația maximă prin găsirea diferenței maxime între distribuția dată și cea normală
+        sup <- max(sup, abs(F(x[i]) - pnorm(x[i])))}
+      return(sup)
+    } else {                           # Distribuție continuă =>
+      return(max(abs(F(x) - pnorm(x))))    # folosim funcția max pentru a găsi diferența maximă între distribuția dată și cea normală
+    }
+  }
+ 
+  # Calculăm marginea dată de inegalitatea Berry-Esseen utilizând deviația maximă
+  margine <- 0.5 * sqrt(E_x(nume, f, f_masa = 0, f_densitate = 0, parametri, x = NULL) * Varianta_x(nume, f, parametri, x = NULL)) * D(Inf)
+  return(margine)
+}
+
+
+# Distribuția binomială
+nume_binomiala <- "Binomiala"
+functie_densitate_binomiala <- dbinom
+parametri_binomiala <- list(size = 10, prob = 0.5)
+
+
+margine_binomiala <- margine_berry_esseen(nume_binomiala, functie_densitate_binomiala, parametri_binomiala)
+cat("Marginea pentru distribuția binomială:", margine_binomiala, "\n")
+
+
+# Distribuția geometrică
+nume_geometrica <- "Geometrica"
+functie_densitate_geometrica <- dgeom
+parametri_geometrica <- list(prob = 0.3)
+
+
+margine_geometrica <- margine_berry_esseen(nume_geometrica, functie_densitate_geometrica, parametri_geometrica)
+cat("Marginea pentru distribuția geometrică:", margine_geometrica, "\n")
+
+
+# Distribuția normală
+nume_normala <- "Normala"
+functie_densitate_normala <- dnorm
+parametri_normala <- list(mean = 3, sd = 1.5)
+
+
+margine_normala <- margine_berry_esseen(nume_normala, functie_densitate_normala, parametri_normala)
+cat("Marginea pentru distribuția normală:", margine_normala, "\n")
+
+
+# Distribuția gamma
+nume_gamma <- "Gamma"
+functie_densitate_gamma <- dgamma
+parametri_gamma <- list(shape = 2, rate = 0.5)
+
+
+margine_gamma <- margine_berry_esseen(nume_gamma, functie_densitate_gamma, parametri_gamma)
+cat("Marginea pentru distribuția gamma:", margine_gamma, "\n")
+
+
+# Distribuția exponențială
+nume_exponentiala <- "Exponentiala"
+functie_densitate_exponentiala <- dexp
+parametri_exponentiala <- list(rate = 0.2)
+
+
+margine_exponentiala <- margine_berry_esseen(nume_exponentiala, functie_densitate_exponentiala, parametri_exponentiala)
+cat("Marginea pentru distribuția exponențială:", margine_exponentiala, "\n")
+
+
+
+# 5.1
+nr <- 10^6    #numărul de studenți
+n <- 13        #numărul de etape
+lambda <- seq(2, 1, length.out = n) #definirea ratei lambda pentru distribuția exponențială
+#in acest context, lambda reprezintă rata la care studenții progresează prin etape
+#valorile din vectorul lambda sunt utilizate pentru a genera timpul pentru fiecare etapă
+alpha<-rep(0.9,n) #probabilitățile alpha i
+#funcție pentru calcularea timpului unui student pentru fiecare etapă
+timp <- function(n, lambda, alpha) {
+  tp <- numeric(n) #vectorul în care reținem timpul petrecut de student la fiecare etapă
+  tp[1] <- rexp(1, rate = lambda[1]) #timpul petrecut pentru prima problemă
+  for (i in 2:n) { #timpul necesar pentru celelalte etape pentru student
+    x <- sample(c(1, 0), 1, prob = c(alpha[i - 1], 1 - alpha[i - 1])) # 1-trece la următoarea etapă, 0-nu trece
+    if (x == 1) { #dacă trece la următoarea etapă
+      tp[i] <- rexp(1, rate = lambda[i]) #generează valoarea timpului necesar pentru rezolvarea problemei i
+    } 
+    else {
+      break #dacă x==0 studentul se oprește din lucru iar restul de n-i timpi vor fi 0
+    }
+  }
+  return(tp) #un vector cu timpii necesari studentului pentru fiecare problemă
+}
+
+#calculul timpului total pentru fiecare student și stocarea în vectorul T
+T <- numeric(nr) #nr-număr  studenți
+for (j in 1:nr) { #pentru fiecare student
+  T[j] <- sum(timp(n, lambda, alpha)) #stochez suma elementelor vectorului generat de funcția timp pentru studentul j i.e. timpul necesar pentru rezolvarea tuturor subiectelor 
+}
+#afișarea aproximării mediei timpului total
+cat("Media timpului total petrecut de studenți:", mean(T))
+
+
+
+# 5.2
+hist(T,col="darkred",main="Repatiția lui T", xlab="Timp", ylab="Număr studenți",xlim=c(0,25)) #histogramă reparțiția lui T
+
+
+
+# 5.3
+medie_exacta<-1/lambda[1]
+p<-1
+for (i in 2:n){
+  p<-p*alpha[i-1]
+  medie_exacta<-medie_exacta+p/lambda[i]
+}
+cat("Media timpului total petrecut de studenți:", medie_exacta,'\n')
+cat("Eroare:", abs(mean(T)-medie_exacta))
+
+
+
+# 5.4
+nr_studenti_fin<-0 #nr. studentilor care finalizeaza activitatea inițializat cu 0
+for(j in 1:nr){ #pentru fiecare student se verifică dacă finalizează
+    if(min(timp(n,lambda,alpha))!=0){ #ca să termine trebuie ca timpul pentru fiecare problemă să fie diferit de 0
+        nr_studenti_fin<-nr_studenti_fin+1 #nr. de studenti care termină activitatea crește cu 1
+    }
+}
+probabilitate_finalizare<-nr_studenti_fin/nr #nr. studenti care finalizează activitatea/nr. total de studenti
+cat("Probabilitate finalizare: ",probabilitate_finalizare)
+
+
+
+#5.5
+sigma<-6 #timpul față de care timpul de finalizare trebuie să fie mai mic sau egal
+nr_studenti_in_timp<-0 #număr studentii care au terminat activitatea într-un timp mai mic sau egal cu sigma
+for(j in 1:nr){ 
+    if(min(timp(n,lambda,alpha))!=0){ #studenții finalizează activitatea
+        if(sum(timp(n,lambda,alpha))<=sigma){ #din studenții care finalizează activitatea într-un timp mai mic sau egal decat sigma
+            nr_studenti_in_timp<-nr_studenti_in_timp+1 #numarul studenților în timp creste cu 1
+        }
+    }
+}
+# probabilitate condiționata P(studentul să termine în timp|studentul să termine activitatea)
+probabilitate_sigma<-nr_studenti_in_timp/nr_studenti_fin #nr. studenți care finalizează în timp/nr. studenți care finalizează activitatea
+cat("Probabilitatea ca persoana sa finalizeze intr-un timp mai mic sau egal cu sigma:",probabilitate_sigma)
+
+
+
+#5.6
+
+p <- numeric(n)  #aici stochez pentru fiecare etapă probabilitatea de a se opri înainte de ea
+
+for (i in 2:n) { #pentru fiecare etapă
+  count_oprire <- 0  # numărul de persoane care se opresc înainte de etapa 
+  for (j in 1:nr) {
+    if (timp(n, lambda, alpha)[i] == 0) { #dacă timpul corespunzător etapei este 0 atunci a finalizat înainte de ea
+      count_oprire <- count_oprire + 1 #numarul celor care au finalizat înainte de etapa curentă crește cu 1
+    }
+  }
+  p[i] <- count_oprire / nr  #calculul probabilității pentru etapa i
+}
+rezultate <- data.frame(Etapa = 2:n, Probabilitate = p[2:n])#tabel cu probabilitățile de a termina înainte de fiecare etapă
+
+#afișez tabelul
+print(rezultate)
+
+hist(p,col="darkblue",main="Repartitia lui p", xlab="Timp ore")
+
+
+```
+
